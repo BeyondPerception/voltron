@@ -182,7 +182,6 @@ class MemoryView(TerminalView):
 
         if not self.title:
             self.title = "[memory]"
-            self.title_save = self.title
 
         super(MemoryView, self).render(results)
 
@@ -234,7 +233,7 @@ class MemoryView(TerminalView):
     def reprint_title(self):
         print("\r" + " "*self.window_size()[1], end='')
         print("\r" + self.title, end='')
-        if (self.title != self.title_save):
+        if self.is_typing:
             print(self.colour('_', attrs=['blink']), end='')
             sys.stdout.flush()
 
