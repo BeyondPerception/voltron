@@ -1,5 +1,7 @@
 import logging
 import six
+import re
+import sys
 import pygments
 import pygments.formatters
 from pygments.token import *
@@ -17,6 +19,9 @@ class MemoryView(TerminalView):
     last_memory = None
     last_address = 0
 
+    is_typing = False
+    title_save = ""
+
     @classmethod
     def configure_subparser(cls, subparsers):
         sp = subparsers.add_parser('memory', help='display a chunk of memory', aliases=('m', 'mem'))
@@ -30,7 +35,7 @@ class MemoryView(TerminalView):
         sp.add_argument('--reverse', '-v', action='store_true', help='reverse the output', default=False)
         sp.add_argument('--track', '-t', action='store_true', help='track and highlight changes', default=True)
         sp.add_argument('--no-track', '-T', action='store_false', help='don\'t track and highlight changes')
-        
+
         group = sp.add_mutually_exclusive_group(required=False)
         group.add_argument('--address', '-a', action='store',
                            help='address (in hex or decimal) from which to start reading memory')
@@ -177,6 +182,7 @@ class MemoryView(TerminalView):
 
         if not self.title:
             self.title = "[memory]"
+            self.title_save = self.title
 
         super(MemoryView, self).render(results)
 
@@ -186,6 +192,51 @@ class MemoryView(TerminalView):
         if prefix:
             addr_str = prefix + addr_str
         return addr_str
+
+    def handle_key(self, key):
+        """
+        Handle a keypress.
+        """
+        if self.is_typing:
+            # Display the text on the screen
+            if key.is_sequence:
+                if key.name == "KEY_ESCAPE":
+                    self.title = self.title_save
+                    self.is_typing = False
+                elif key.name == "KEY_BACKSPACE":
+                    if len(self.title) > 1:
+                        self.title = self.title[:-1]
+                elif key.name == "KEY_ENTER":
+                    # Run command and jump to address
+                    output = self.title[1:]
+                    print(output)
+                    if re.match("(0x)?[0-9]+", output):
+                        self.args.address = output
+                    else:
+                        self.args.command = output
+                    self.title = self.title_save
+                    self.is_typing = False
+                    self.client.update()
+            else:
+                if not key.is_sequence:
+                    self.title += str(key)
+        else:
+            if str(key) == "/":
+                self.title_save = self.title
+                self.is_typing = True
+                self.title = "/"
+            else:
+                # Handle the key press normally
+                super().handle_key(key)
+                return
+        self.reprint_title()
+    
+    def reprint_title(self):
+        print("\r" + " "*self.window_size()[1], end='')
+        print("\r" + self.title, end='')
+        if (self.title != self.title_save):
+            print(self.colour('_', attrs=['blink']), end='')
+            sys.stdout.flush()
 
 
 class MemoryViewPlugin(ViewPlugin):
